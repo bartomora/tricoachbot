@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import TelegramBot from 'node-telegram-bot-api';
-// Importación directa de las piezas del puzzle
+// Cambiamos la forma de llamar al SDK para que sea 100% compatible
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SseClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
@@ -13,15 +13,14 @@ if (!token || !apiKey || !mcpUrl) {
   process.exit(1);
 }
 
-// Configuración del Bot y la IA
 const bot = new TelegramBot(token, { polling: true });
 const genAI = new GoogleGenerativeAI(apiKey);
 
 async function startCoach() {
-  console.log("🔗 Intentando conectar a Garmin en:", mcpUrl);
+  console.log("🔗 Conectando a Garmin en:", mcpUrl);
   
   try {
-    // Aquí es donde el Named Import (SseClientTransport) evita el error de "constructor"
+    // Usamos el transporte SSE para hablar con tu otro servidor de Railway
     const transport = new SseClientTransport(new URL(mcpUrl));
     const mcpClient = new Client(
       { name: "Coach-Edgardo-Bot", version: "1.0.0" },
@@ -29,28 +28,29 @@ async function startCoach() {
     );
 
     await mcpClient.connect(transport);
-    console.log("🚀 COACH EN LÍNEA: Conectado a Garmin con éxito");
+    console.log("🚀 COACH ACTIVO: Ya puedo leer tu Garmin");
 
+    // Traemos las herramientas del servidor de Garmin
     const { tools } = await mcpClient.listTools();
     
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-pro",
-      systemInstruction: `Sos el Head Coach de Edgardo. Objetivo: Sub-11 en Cozumel. FTP: 200W. 
-      Zonas: 155W-160W. Usá los datos de Garmin para auditar HRV y entrenamientos.`,
+      systemInstruction: "Sos el Head Coach de triatlón de Edgardo. Objetivo: Sub-11 en Cozumel. FTP: 200W. Sé técnico, analítico y usá los datos de Garmin para responder.",
       tools: [{ functionDeclarations: tools }]
     });
 
     const chat = model.startChat();
 
     bot.on('message', async (msg) => {
-      if (!msg.text) return;
+      if (!msg.text || msg.text.startsWith('/')) return;
       const chatId = msg.chat.id;
 
       try {
         let result = await chat.sendMessage(msg.text);
         let response = result.response;
 
-        if (response.functionCalls()) {
+        // Bucle para procesar llamadas a Garmin (pueden ser varias)
+        while (response.functionCalls()?.length > 0) {
           const toolResults = [];
           for (const call of response.functionCalls()) {
             console.log(`📊 Consultando Garmin: ${call.name}`);
@@ -62,6 +62,7 @@ async function startCoach() {
               functionResponse: { name: call.name, response: toolResult }
             });
           }
+          // Le devolvemos los datos a Gemini para que termine su análisis
           result = await chat.sendMessage(toolResults);
           response = result.response;
         }
@@ -69,14 +70,13 @@ async function startCoach() {
         bot.sendMessage(chatId, response.text());
       } catch (err) {
         console.error("Error en chat:", err);
-        bot.sendMessage(chatId, "⚠️ Tuve un calambre mental. Reintentá en un segundo.");
+        bot.sendMessage(chatId, "⚠️ Se me soltó la cadena. Probá preguntarme de nuevo.");
       }
     });
 
   } catch (error) {
     console.error("❌ Falló la conexión:", error.message);
-    // Reintento en 10 segundos si el servidor MCP no responde
-    setTimeout(startCoach, 10000);
+    setTimeout(startCoach, 10000); // Reintento automático
   }
 }
 

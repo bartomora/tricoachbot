@@ -1,35 +1,42 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import TelegramBot from 'node-telegram-bot-api';
-// Cambiamos la forma de importar para evitar el error de constructor
-import * as mcpSdk from "@modelcontextprotocol/sdk/client/index.js";
-import * as sseSdk from "@modelcontextprotocol/sdk/client/sse.js";
+// Importación directa de las piezas del puzzle
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SseClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 
 const token = process.env.TELEGRAM_TOKEN;
 const apiKey = process.env.GEMINI_API_KEY;
 const mcpUrl = process.env.GARMIN_MCP_URL;
 
 if (!token || !apiKey || !mcpUrl) {
-  console.error("❌ Faltan variables: TOKEN, API_KEY o URL.");
+  console.error("❌ ERROR: Faltan variables en Railway.");
   process.exit(1);
 }
 
+// Configuración del Bot y la IA
 const bot = new TelegramBot(token, { polling: true });
 const genAI = new GoogleGenerativeAI(apiKey);
 
 async function startCoach() {
-  // Usamos el namespace para llamar al constructor correctamente
-  const transport = new sseSdk.SseClientTransport(new URL(mcpUrl));
-  const mcpClient = new mcpSdk.Client({ name: "Coach-Edgardo", version: "1.0.0" }, { capabilities: {} });
-
+  console.log("🔗 Intentando conectar a Garmin en:", mcpUrl);
+  
   try {
+    // Aquí es donde el Named Import (SseClientTransport) evita el error de "constructor"
+    const transport = new SseClientTransport(new URL(mcpUrl));
+    const mcpClient = new Client(
+      { name: "Coach-Edgardo-Bot", version: "1.0.0" },
+      { capabilities: {} }
+    );
+
     await mcpClient.connect(transport);
-    console.log("🚀 Coach conectado a Garmin en Railway");
+    console.log("🚀 COACH EN LÍNEA: Conectado a Garmin con éxito");
 
     const { tools } = await mcpClient.listTools();
     
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-pro",
-      systemInstruction: "Sos el Head Coach de triatlón de Edgardo. Objetivo: Sub-11 en Cozumel. FTP: 200W. Sé técnico y motivador.",
+      systemInstruction: `Sos el Head Coach de Edgardo. Objetivo: Sub-11 en Cozumel. FTP: 200W. 
+      Zonas: 155W-160W. Usá los datos de Garmin para auditar HRV y entrenamientos.`,
       tools: [{ functionDeclarations: tools }]
     });
 
@@ -46,6 +53,7 @@ async function startCoach() {
         if (response.functionCalls()) {
           const toolResults = [];
           for (const call of response.functionCalls()) {
+            console.log(`📊 Consultando Garmin: ${call.name}`);
             const toolResult = await mcpClient.callTool({
               name: call.name,
               arguments: call.args
@@ -57,16 +65,18 @@ async function startCoach() {
           result = await chat.sendMessage(toolResults);
           response = result.response;
         }
+
         bot.sendMessage(chatId, response.text());
       } catch (err) {
-        console.error(err);
-        bot.sendMessage(chatId, "⚠️ Hubo un error. Seguí entrenando, yo me reinicio.");
+        console.error("Error en chat:", err);
+        bot.sendMessage(chatId, "⚠️ Tuve un calambre mental. Reintentá en un segundo.");
       }
     });
 
   } catch (error) {
-    console.error("❌ Error de conexión:", error);
-    setTimeout(startCoach, 5000);
+    console.error("❌ Falló la conexión:", error.message);
+    // Reintento en 10 segundos si el servidor MCP no responde
+    setTimeout(startCoach, 10000);
   }
 }
 

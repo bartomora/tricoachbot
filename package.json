@@ -1,7 +1,7 @@
 {
   "name": "cozumel-coach-bot",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.mjs",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -12,6 +12,6 @@
     "@modelcontextprotocol/sdk": "^1.0.1"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.mjs"
   }
 }

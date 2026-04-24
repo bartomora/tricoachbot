@@ -1,8 +1,15 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
+// Importamos las piezas usando el sistema de compatibilidad
+const mcp = require('@modelcontextprotocol/sdk/client/index.js');
+const sse = require('@modelcontextprotocol/sdk/client/sse.js');
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import TelegramBot from 'node-telegram-bot-api';
-// Importamos todo el paquete para inspeccionarlo
-import * as mcpClientSdk from "@modelcontextprotocol/sdk/client/index.js";
-import * as sseTransportSdk from "@modelcontextprotocol/sdk/client/sse.js";
+
+const Client = mcp.Client;
+const SseClientTransport = sse.SseClientTransport;
 
 const token = process.env.TELEGRAM_TOKEN;
 const apiKey = process.env.GEMINI_API_KEY;
@@ -16,20 +23,10 @@ if (!token || !apiKey || !mcpUrl) {
 const bot = new TelegramBot(token, { polling: true });
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// LÓGICA DE DETECCIÓN DE CONSTRUCTOR (La clave del éxito)
-const Client = mcpClientSdk.Client || mcpClientSdk.default?.Client;
-// Aquí buscamos la clase SseClientTransport donde sea que esté escondida
-const SseClientTransport = sseTransportSdk.SseClientTransport || sseTransportSdk.default?.SseClientTransport || sseTransportSdk.default;
-
 async function startCoach() {
-  console.log("🔗 Intentando conectar a Garmin...");
+  console.log("🔗 Intentando conectar a Garmin en:", mcpUrl);
   
   try {
-    // Verificamos si logramos encontrar el constructor
-    if (typeof SseClientTransport !== 'function') {
-        throw new Error("No se pudo encontrar el constructor SseClientTransport. Revisá la versión del SDK.");
-    }
-
     const transport = new SseClientTransport(new URL(mcpUrl));
     const mcpClient = new Client(
       { name: "Coach-Edgardo", version: "1.0.0" },
@@ -37,13 +34,14 @@ async function startCoach() {
     );
 
     await mcpClient.connect(transport);
-    console.log("🚀 COACH EN LÍNEA: Conectado a Garmin.");
+    console.log("🚀 COACH EN LÍNEA: Conexión establecida");
 
     const { tools } = await mcpClient.listTools();
     
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-pro",
-      systemInstruction: "Sos el Coach de triatlón de Edgardo. Objetivo: Sub-11 en Cozumel. Sé técnico y motivador.",
+      systemInstruction: `Sos el Head Coach de triatlón de Edgardo. Objetivo: Sub-11 en Cozumel. 
+      FTP: 200W. Zonas: 155W-160W. Sé técnico y usá Garmin para auditar vatios y recuperación.`,
       tools: [{ functionDeclarations: tools }]
     });
 

@@ -1,17 +1,17 @@
 {
   "name": "cozumel-coach-bot",
   "version": "1.0.0",
-  "main": "index.mjs",
   "type": "module",
+  "main": "index.mjs",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node index.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "node-telegram-bot-api": "^0.66.0",
-    "@modelcontextprotocol/sdk": "^1.0.1"
-  },
-  "scripts": {
-    "start": "node index.mjs"
+    "@modelcontextprotocol/sdk": "1.0.1"
   }
 }

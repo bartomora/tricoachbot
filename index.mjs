@@ -2,11 +2,13 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import TelegramBot from 'node-telegram-bot-api';
 import * as mcpModule from "@modelcontextprotocol/sdk/client/index.js";
 import * as sseModule from "@modelcontextprotocol/sdk/client/sse.js";
+// LA PIEZA QUE FALTABA:
+import EventSource from "eventsource";
 
-// Lógica de detección basada en el log de depuración (SSE vs Sse)
+// Hacemos que EventSource sea global para que el SDK lo encuentre
+globalThis.EventSource = EventSource;
+
 const Client = mcpModule.Client || mcpModule.default?.Client || mcpModule.default;
-
-// Buscamos específicamente SSEClientTransport (como indicó el log)
 const SseClientTransport = 
     sseModule.SSEClientTransport || 
     sseModule.SseClientTransport || 
@@ -30,10 +32,6 @@ async function startCoach() {
     console.log("🔗 Conectando a Garmin en:", mcpUrl);
     
     try {
-        if (typeof SseClientTransport !== 'function') {
-            throw new Error("No se pudo instanciar el transporte. Verificá la versión del SDK.");
-        }
-
         const transport = new SseClientTransport(new URL(mcpUrl));
         const mcpClient = new Client(
             { name: "Coach-Bot", version: "1.0.0" },
@@ -41,13 +39,13 @@ async function startCoach() {
         );
 
         await mcpClient.connect(transport);
-        console.log("🚀 COACH EN LÍNEA: Conexión establecida con Garmin");
+        console.log("🚀 COACH EN LÍNEA: Conexión establecida");
 
         const { tools } = await mcpClient.listTools();
         
         const model = genAI.getGenerativeModel({
             model: "gemini-1.5-pro",
-            systemInstruction: "Sos un Head Coach de triatlón. Tu objetivo es ayudar al atleta a alcanzar su mejor rendimiento usando datos de Garmin para auditar potencia, HRV y recuperación.",
+            systemInstruction: "Sos el Head Coach de triatlón de Edgardo. Objetivo: Sub-11 en Cozumel. FTP: 200W. Sé técnico y analítico con los datos de Garmin.",
             tools: [{ functionDeclarations: tools }]
         });
 
@@ -80,7 +78,7 @@ async function startCoach() {
                 bot.sendMessage(chatId, response.text());
             } catch (err) {
                 console.error("Error en chat:", err);
-                bot.sendMessage(chatId, "⚠️ Error procesando la consulta. Reintentá en un momento.");
+                bot.sendMessage(chatId, "⚠️ Se me salió la cadena. Probá de nuevo.");
             }
         });
 
